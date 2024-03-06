@@ -1,5 +1,15 @@
 # syntax=docker/dockerfile:1
 FROM python:3.9-alpine
-COPY . .
-RUN pip install -r requirements.txt
+WORKDIR /app
+COPY ./bin/deploy.sh /app/bin/
+COPY ./lambdas /app/lambdas/
+COPY ./volume /app/volume/
+COPY ./website /app/website/
+COPY ./requirements-dev.txt /app/
+RUN pwd
+RUN ls bin
+RUN pip install -r requirements-dev.txt
+RUN chmod +x bin/deploy.sh
+# TODO: jq, zip and curl need to be there
 CMD ["bin/deploy.sh"]
+ENTRYPOINT ["/bin/sh"]
