@@ -1,5 +1,5 @@
 # Run with the following line
-# docker-compose -f "./docker-compose-localstack.yaml" -d up
+# docker-compose -f "./docker-compose-localstack.yaml" up -d
 
 version: "3.8"
 
