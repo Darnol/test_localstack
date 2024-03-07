@@ -12,7 +12,7 @@ RUN apt install curl -y
 RUN pip3 install -r requirements-dev.txt
 RUN chmod +x bin/deploy.sh
 
-# TODO: jq, zip and curl need to be there
+# This line runs the deploy script upon running the container
 # CMD ["bin/deploy.sh"]
 
 ENTRYPOINT ["/bin/sh"]
