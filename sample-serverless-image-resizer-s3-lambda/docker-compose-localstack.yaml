@@ -1,5 +1,5 @@
 # Run with the following line
-# docker-compose -f "./docker-compose-localstack.yaml" up -d
+# docker-compose -f "./docker-compose-localstack.yaml" up -d --force-recreate
 
 version: "3.8"
 
@@ -16,13 +16,21 @@ services:
     volumes:
       - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - test_localstack
+
   sample-app:
     container_name: "sample-app"
     build: .
     environment:
       - AWS_DEFAULT_REGION=us-east-1
-      # - AWS_ENDPOINT_URL=localstack://
+      # - AWS_ENDPOINT_URL=localstack:// ????
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
     depends_on:
       - localstack
+    networks:
+      - test_localstack
+
+networks:
+  test_localstack:
