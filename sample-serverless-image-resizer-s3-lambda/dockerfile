@@ -13,6 +13,6 @@ RUN pip3 install -r requirements-dev.txt
 RUN chmod +x bin/deploy.sh
 
 # This line runs the deploy script upon running the container
-# CMD ["bin/deploy.sh"]
+CMD ["bin/deploy.sh"]
 
-ENTRYPOINT ["/bin/sh"]
+ENTRYPOINT ["/bin/bash"]
