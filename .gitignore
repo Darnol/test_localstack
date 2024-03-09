@@ -1,3 +1,5 @@
 .venv
 .DS_Store
-localstack.exe
+
+# Any volume dirs from docker
+volume/
