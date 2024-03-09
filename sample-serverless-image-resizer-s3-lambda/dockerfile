@@ -1,18 +1,28 @@
 # syntax=docker/dockerfile:1
-FROM ubuntu:22.04
+FROM python:3.9-alpine
 WORKDIR /app
-RUN apt-get update && apt-get install -y python3.9 python3-pip
 COPY ./bin/deploy.sh /app/bin/
 COPY ./lambdas /app/lambdas/
 COPY ./website /app/website/
 COPY ./requirements-dev.txt /app/
-RUN apt install zip -y
-RUN apt install jq -y
-RUN apt install curl -y
-RUN pip3 install -r requirements-dev.txt
+
+# Update and set up apk package manager
+RUN apk update
+RUN apk upgrade
+
+# Install packages
+RUN apk add zip
+RUN apk add curl
+RUN apk add jq
+
+# Install python dependencies
+RUN pip install -r requirements-dev.txt
+
+# Make deploy script executable
 RUN chmod +x bin/deploy.sh
 
 # This line runs the deploy script upon running the container
 CMD ["bin/deploy.sh"]
 
-ENTRYPOINT ["/bin/bash"]
+# alpine only has sh, no bash
+ENTRYPOINT ["/bin/sh"]

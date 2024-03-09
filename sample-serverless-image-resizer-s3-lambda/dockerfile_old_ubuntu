@@ -1,0 +1,20 @@
+# NOT IN USE, prefere alpine over ubuntu
+
+# syntax=docker/dockerfile:1
+FROM ubuntu:22.04
+WORKDIR /app
+RUN apt-get update && apt-get install -y python3.9 python3-pip
+COPY ./bin/deploy.sh /app/bin/
+COPY ./lambdas /app/lambdas/
+COPY ./website /app/website/
+COPY ./requirements-dev.txt /app/
+RUN apt install zip -y
+RUN apt install jq -y
+RUN apt install curl -y
+RUN pip3 install -r requirements-dev.txt
+RUN chmod +x bin/deploy.sh
+
+# This line runs the deploy script upon running the container
+CMD ["bin/deploy.sh"]
+
+ENTRYPOINT ["/bin/bash"]
