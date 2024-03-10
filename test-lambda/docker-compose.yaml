@@ -17,7 +17,7 @@ services:
       - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
 
-  # COMMENT OUT to start a "simple" localstack container I can test boto3 with
+  # COMMENT OUT THE FOLLOWING to start a "simple" localstack container I can test boto3 with
   sample-app:
     container_name: "test-lambda"
     build:

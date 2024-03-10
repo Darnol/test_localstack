@@ -1,35 +1,65 @@
 import os
 import zipfile
 import boto3
+from botocore import exceptions
 
-# # Set env variables - Should be given by docker-compose
-# os.environ['AWS_DEFAULT_REGION']='us-east-1'
-# os.environ['AWS_ENDPOINT_URL']='http://localhost.localstack.cloud:4566'
-# os.environ['AWS_ACCESS_KEY_ID']='fakecredentials'
-# os.environ['AWS_SECRET_ACCESS_KEY']='fakecredentials'
+# FOR MANUAL RUNING ONLY
+# os.chdir("./test-lambda")
 
+# Parameters
+LAMBDA_FUNCITON_NAME = "test1"
+LAMBDA_ROLE = "arn:aws:iam::000000000000:role/lambda-role" # given by localstack
+
+# Set env variables - Should be given by docker-compose
+CONFIG_ENV = {
+    'AWS_DEFAULT_REGION' : 'us-east-1',
+    'AWS_ENDPOINT_URL' : 'http://localhost.localstack.cloud:4566',
+    'AWS_ACCESS_KEY_ID' : 'fakecredentials',
+    'AWS_SECRET_ACCESS_KEY' : 'fakecredentials',
+}
+for env_var, env_value in CONFIG_ENV.items():
+    try:
+        print(f"{env_var} set to {os.environ[env_var]})")
+    except KeyError:
+        os.environ[env_var] = env_value
+
+# Create client
 lambda_client = boto3.client("lambda")
 
-lambda_function_name = "test1"
-
 # zip the lambda handler function file to create a deployment package
-with zipfile.ZipFile(f'lambdas/{lambda_function_name}/handler.zip', mode='w') as tmp:
-    complete_file_path = f'lambdas/{lambda_function_name}/handler.py'
+with zipfile.ZipFile(f'lambdas/{LAMBDA_FUNCITON_NAME}/handler.zip', mode='w') as tmp:
+    complete_file_path = f'lambdas/{LAMBDA_FUNCITON_NAME}/handler.py'
     tmp.write(complete_file_path, arcname=os.path.basename(complete_file_path))
+
+# purge all lambda functions with the name we want to deploy, if it exists
+try:
+    lambda_client.delete_function(FunctionName = LAMBDA_FUNCITON_NAME)
+except exceptions.ClientError as error:
+    if error.response['Error']['Code'] == 'ResourceNotFoundException':
+        print(f'Delete funciton: function does not exist')
+    else:
+        raise error
 
 # deploy a simple lambda function
 response_create = lambda_client.create_function(
-    FunctionName = lambda_function_name,
-    Role = "arn:aws:iam::000000000000:role/lambda-role",
+    FunctionName = LAMBDA_FUNCITON_NAME,
+    Role = LAMBDA_ROLE,
     Handler = "handler.handler",
     Runtime = "python3.10",
-    Code = {'ZipFile': open(f'./lambdas/{lambda_function_name}/handler.zip', 'rb').read()}
+    Code = {'ZipFile': open(f'./lambdas/{LAMBDA_FUNCITON_NAME}/handler.zip', 'rb').read()}
 )
 # Create an URL to invoke
 response_create_url = lambda_client.create_function_url_config(
-    FunctionName=lambda_function_name,
+    FunctionName=LAMBDA_FUNCITON_NAME,
     AuthType='NONE'
 )
-print(response_create_url)
+print(response_create_url) # To print the URL we can invoke the function with
 
-# lambda_client.invoke(FunctionName = lambda_function_name)['Payload'].readlines()
+# Wait until the lambda is active
+lambda_client.get_waiter("function_active_v2").wait(FunctionName = LAMBDA_FUNCITON_NAME)
+
+# When ready, invoke the lambda function
+print("Waiting over")
+response_invocation = lambda_client.invoke(FunctionName = LAMBDA_FUNCITON_NAME)['Payload'].readlines()
+print(response_invocation)
+print("Invocation over")
