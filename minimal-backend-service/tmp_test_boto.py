@@ -1,8 +1,9 @@
 import os
 
-os.chdir("./test-lambda")
+os.chdir("./minimal-backend-service")
 
 import boto3
+import zipfile
 from pprint import PrettyPrinter
 pp = PrettyPrinter(indent=2)
 
@@ -13,92 +14,79 @@ os.environ['AWS_ACCESS_KEY_ID']='fakecredentials'
 os.environ['AWS_SECRET_ACCESS_KEY']='fakecredentials'
 
 lambda_client = boto3.client("lambda")
-function_name = "testlambda_function"
+apig_client = boto3.client("apigateway")
 
-pp.pprint(lambda_client.list_functions())
+APIG_NAME = "apig_test"
 
-# Tabula rasa, delete all lambda functions
-for fct in lambda_client.list_functions()['Functions']:
-    lambda_client.delete_function(FunctionName = fct['FunctionName'])
-
+# Deploy a lambda function
+LAMBDA_FUNCTION_NAME = "list_shopprofiles"
+LAMBDA_ROLE = "arn:aws:iam::000000000000:role/lambda-role" # given by localstack
+with zipfile.ZipFile(f'lambdas/{LAMBDA_FUNCTION_NAME}/handler.zip', mode='w') as tmp:
+    complete_file_path = f'lambdas/{LAMBDA_FUNCTION_NAME}/handler.py'
+    tmp.write(complete_file_path, arcname=os.path.basename(complete_file_path))
 response_create = lambda_client.create_function(
-    FunctionName = function_name,
-    Role = "arn:aws:iam::000000000000:role/lambda-role",
+    FunctionName = LAMBDA_FUNCTION_NAME,
+    Role = LAMBDA_ROLE,
     Handler = "handler.handler",
     Runtime = "python3.10",
-    Code = {'ZipFile': open('./lambdas/test1/handler.zip', 'rb').read()}
-)
-pp.pprint(response_create)
-
-response_create_url = lambda_client.create_function_url_config(
-    FunctionName=function_name,
-    AuthType='NONE'
-)
-pp.pprint(response_create_url)
-
-pp.pprint(lambda_client.invoke(FunctionName = function_name))
-lambda_client.invoke(FunctionName = function_name)['Payload'].readlines()
-
-
-
-# DYNAMO
-
-# Define the attributes and schema of the DB
-DYNAMO_DB_CONFIG = {
-    "TableName":'shopprofiles',
-    "KeySchema":[
-        {
-            'AttributeName': 'shopemail',
-            'KeyType': 'HASH'
-        },
-        {
-            'AttributeName': 'shoppassword',
-            'KeyType': 'RANGE'
-        }
-    ],
-    "AttributeDefinitions":[
-        {
-            'AttributeName': 'shopemail',
-            'AttributeType': 'S'
-        },
-        {
-            'AttributeName': 'shoppassword',
-            'AttributeType': 'S'
-        }
-    ],
-    "BillingMode":"PAY_PER_REQUEST"
-}
-FAKE_PROFILES = [
-    {
-        'shopemail':'shop_1_at_asdf',
-        'shoppassword':'shop_1_password',
+    Code = {'ZipFile': open(f'./lambdas/{LAMBDA_FUNCTION_NAME}/handler.zip', 'rb').read()},
+    # Pass the table name as environment variable
+    Environment={
+        'Variables': {"TableName" : "shopprofiles"}
     },
-    {
-        'shopemail':'shop_2_at_asdf',
-        'shoppassword':'shop_2_password',
-    }
-]
+)
 
-dynamo_resource = boto3.resource("dynamodb")
-dynamo_resource.create_table(**DYNAMO_DB_CONFIG)
+# Get the ARN of the desired lambda function to integrate
+pp.pprint(lambda_client.list_functions())
+lambda_arn = [function_def['FunctionArn'] for function_def in lambda_client.list_functions()['Functions'] if function_def['FunctionName']=="list_shopprofiles"][0]
 
-# Get the Table object
-dynamo_table = dynamo_resource.Table("shopprofiles")
-print(dynamo_table.creation_date_time)
+# Create the REST API
+apig_rest_api = apig_client.create_rest_api(name = APIG_NAME)
+apig_id = apig_rest_api["id"]
 
-# Put an item
-dynamo_table.put_item(Item = FAKE_PROFILES[0])
+# Fetch all resources
+apig_resources = apig_client.get_resources(restApiId = apig_id)
+pp.pprint(apig_resources)
 
-# Retreive an item with wrong key -> Error
-response_get = dynamo_table.get_item(Key = {'NONEXISTENTKEY':'shop_1_at_adsf', 'shoppassword':'shop_1_password'})
+# Add resource
+apig_new_resource = apig_client.create_resource(
+    restApiId = apig_id,
+    parentId = apig_resources['items'][0]['id'],
+    pathPart = "someresource"
+)
 
-# Retreive an item with missing key -> Error
-response_get = dynamo_table.get_item(Key = {'shopemail':'shop_1_at_adsf'})
+# Put a HTTP method to a resource
+apig_new_method = apig_client.put_method(
+    restApiId = apig_id,
+    resourceId = apig_new_resource['id'],
+    httpMethod = "GET",
+    authorizationType = "NONE",
+    apiKeyRequired = False,
+    operationName = "ListShopprofiles"
+)
+pp.pprint(apig_new_method)
 
-# Retreive an item with a key that is not in the table -> Item does not exist, returns empty, but no error
-response_get = dynamo_table.get_item(Key = {'shopemail':'TYPO_IN_KEY', 'shoppassword':'shop_1_password'})
-pp.pprint(response_get)
+# Put an integration
+apig_new_integration = apig_client.put_integration(
+    restApiId = apig_id,
+    resourceId = apig_new_resource['id'],
+    httpMethod = "GET",
+    type = "AWS_PROXY",
+    integrationHttpMethod = "GET",
+    uri = f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/{lambda_arn}/invocations"
+)
+pp.pprint(apig_new_integration)
 
-# Retreive an item -> Success
-response_get = dynamo_table.get_item(Key = {'shopemail':'shop_1_at_asdf', 'shoppassword':'shop_1_password'})
-pp.pprint(response_get)
+# Deploy the API
+apig_deployment = apig_client.create_deployment(
+    restApiId = apig_id,
+    stageName = APIG_NAME + "_deployment"
+)
+pp.pprint(apig_deployment)
+
+apig_client.get_deployments(
+    restApiId = apig_id
+)
+
+# Test - Create a url to curl
+print(f"http://localhost.localstack.cloud:4566/restapis/{apig_id}/{APIG_NAME}/_user_request_/someresource")

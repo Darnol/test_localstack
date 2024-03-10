@@ -19,7 +19,7 @@ services:
     networks:
       - backend
 
-  # COMMENT OUT THE FOLLOWING to start a "simple" localstack container I can test boto3 with
+  # COMMENT OUT THE FOLLOWING SERVICES to start a "simple" localstack container I can test boto3 with with tmp_test_boto.py
   shopprofile:
     container_name: "shopprofile"
     build:

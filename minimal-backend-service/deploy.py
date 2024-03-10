@@ -40,6 +40,8 @@ LAMBDA_FUNCTIONS_TO_DEPLOY = ["list_shopprofiles","write_shopprofile"]
 LAMBDA_ROLE = "arn:aws:iam::000000000000:role/lambda-role" # given by localstack
 db_schema = get_db_config()
 DYNAMO_DB_NAME = db_schema['TableName']
+APIG_NAME = "apig_shopprofiles"
+APIG_ROUTE_LIST = "list_shopprofiles"
 
 # Set env variables - Should be given by docker-compose
 CONFIG_ENV = {
@@ -57,11 +59,15 @@ for env_var, env_value in CONFIG_ENV.items():
 # Create clients
 lambda_client = boto3.client("lambda")
 dynamo_client = boto3.client("dynamodb")
+apig_client = boto3.client("apigateway")
+
+
 
 ###
 # Dynamo DB deployment  
 dynamo_client.create_table(**db_schema)
 print("Dynamo DB created")
+
 
 
 ###
@@ -112,3 +118,51 @@ for lambda_function in LAMBDA_FUNCTIONS_TO_DEPLOY:
     # When ready, invoke the lambda function
     print("Waiting over, function is ready")
 
+
+###
+# API Gateway deployment - List Shopprofiles
+LAMBDA_FUNCTION_NAME_TO_INTEGRATE = "list_shopprofiles"
+
+# First fetch the ARN of the lambda function that should be linked
+lambda_arn = [function_def['FunctionArn'] for function_def in lambda_client.list_functions()['Functions'] if function_def['FunctionName']==LAMBDA_FUNCTION_NAME_TO_INTEGRATE][0]
+
+# Create the REST API
+apig_rest_api = apig_client.create_rest_api(name = APIG_NAME)
+apig_id = apig_rest_api["id"]
+
+# Fetch all resources
+apig_resources = apig_client.get_resources(restApiId = apig_id)
+
+# Add resource for a desired path
+apig_new_resource = apig_client.create_resource(
+    restApiId = apig_id,
+    parentId = apig_resources['items'][0]['id'],
+    pathPart = APIG_ROUTE_LIST
+)
+
+# Put a HTTP method to a resource, for list its a GET
+apig_new_method = apig_client.put_method(
+    restApiId = apig_id,
+    resourceId = apig_new_resource['id'],
+    httpMethod = "GET",
+    authorizationType = "NONE",
+    apiKeyRequired = False
+)
+
+# Put an integration to link the lambda function for list
+apig_new_integration = apig_client.put_integration(
+    restApiId = apig_id,
+    resourceId = apig_new_resource['id'],
+    httpMethod = "GET",
+    type = "AWS_PROXY",
+    integrationHttpMethod = "GET",
+    uri = f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/{lambda_arn}/invocations"
+)
+
+# Deploy the API
+apig_deployment = apig_client.create_deployment(
+    restApiId = apig_id
+)
+
+# Test - Create a url to curl
+print(f"{os.environ['AWS_ENDPOINT_URL']}/restapis/{apig_id}/{APIG_NAME}/_user_request_/{APIG_ROUTE_LIST}")
