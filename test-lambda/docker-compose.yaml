@@ -16,6 +16,8 @@ services:
     volumes:
       - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - backend
 
   # COMMENT OUT THE FOLLOWING to start a "simple" localstack container I can test boto3 with
   sample-app:
@@ -33,3 +35,9 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
     depends_on:
       - localstack
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: false

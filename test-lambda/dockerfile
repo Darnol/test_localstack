@@ -6,6 +6,11 @@ COPY ./deploy.py /app/
 COPY ./lambdas /app/lambdas/
 COPY ./requirements.txt /app/
 
+# Remove all zip files from the lambdas folder
+WORKDIR /app/lambdas
+RUN find . -type f -name "*.zip" -exec rm {} \;
+WORKDIR /app
+
 # # Install packages if needed
 # RUN apk add zip
 # RUN apk add curl
@@ -16,6 +21,8 @@ RUN pip install -r requirements.txt
 
 # Make deploy script executable
 RUN chmod +x deploy.py
+
+RUN echo "$PWD"
 
 # This line runs the deploy script upon running the container
 CMD ["deploy.py"]

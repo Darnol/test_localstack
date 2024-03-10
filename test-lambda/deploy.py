@@ -7,7 +7,7 @@ from botocore import exceptions
 # os.chdir("./test-lambda")
 
 # Parameters
-LAMBDA_FUNCITON_NAME = "test1"
+LAMBDA_FUNCITON_NAME = "test1_lambda"
 LAMBDA_ROLE = "arn:aws:iam::000000000000:role/lambda-role" # given by localstack
 
 # Set env variables - Should be given by docker-compose
@@ -23,7 +23,7 @@ for env_var, env_value in CONFIG_ENV.items():
     except KeyError:
         os.environ[env_var] = env_value
 
-# Create client
+# Create clients
 lambda_client = boto3.client("lambda")
 
 # zip the lambda handler function file to create a deployment package
@@ -32,6 +32,7 @@ with zipfile.ZipFile(f'lambdas/{LAMBDA_FUNCITON_NAME}/handler.zip', mode='w') as
     tmp.write(complete_file_path, arcname=os.path.basename(complete_file_path))
 
 # purge all lambda functions with the name we want to deploy, if it exists
+# For error handling see here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/error-handling.html#aws-service-exceptions
 try:
     lambda_client.delete_function(FunctionName = LAMBDA_FUNCITON_NAME)
 except exceptions.ClientError as error:
