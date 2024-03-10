@@ -17,8 +17,9 @@ RUN find . -type f -name "*.zip" -exec rm {} \;
 WORKDIR /app
 
 # # Install packages if needed
+RUN apk update && apk upgrade
 # RUN apk add zip
-# RUN apk add curl
+RUN apk add curl
 # RUN apk add jq
 
 # Install python dependencies

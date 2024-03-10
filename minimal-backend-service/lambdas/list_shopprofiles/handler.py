@@ -1,11 +1,20 @@
 """
 Handle call which lists all shopprofiles
-Returns a list with a dict per profile returned
+Returns a HTTP Response object, otherwise cannot work with API Gateway
 
 The handler has the name of the table hardcoded, this is determined by the config file config/db_schema.json upon deployment
 """
 import os
 import boto3
+import json
+from pprint import PrettyPrinter
+pp = PrettyPrinter(indent=2)
+
+HTTP_RESPONSE_DICT = {
+    'statusCode' : '',
+    'headers' : {},
+    'body' : '' # Returns a JSON as a string
+}
 
 def handler(event, context) -> list[dict]:
     
@@ -25,7 +34,18 @@ def handler(event, context) -> list[dict]:
 
     print("Scanning table")
     response_scan = dynamo_table.scan(TableName = "shopprofiles")
-    return(response_scan)
+    print(type(response_scan))
+    pp.pprint(response_scan)
+    
+    print("Extracting items")
+    body = json.dumps(response_scan['Items'])
+
+    print("Return HTTP object")
+    HTTP_RESPONSE_DICT['statusCode'] = '200'
+    HTTP_RESPONSE_DICT['headers'] = {"Content-Type": "application/json"}
+    HTTP_RESPONSE_DICT['body'] = body
+
+    return HTTP_RESPONSE_DICT
 
 if __name__ == "__main__":
     print(handler(None, None))

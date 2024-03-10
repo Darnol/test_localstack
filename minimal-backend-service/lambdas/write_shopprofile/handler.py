@@ -5,6 +5,7 @@ If an error occurs within the handler (not wrong parameters for the lambda invoc
 - This handler does not handle that but simply returns the object
 
 TODO: Error handling (either let handler function fail, or wrap?), duplicates?
+TODO: Resonse should not be a dict but a valid HTTP Response like in the handler of list_shopprofiles
 
 The handler has the name of the table hardcoded, this is determined by the config file config/db_schema.json upon deployment
 """
@@ -15,7 +16,7 @@ import boto3
 from pprint import PrettyPrinter
 pp = PrettyPrinter(indent=2)
 
-def handler(event: dict, context):
+def handler(event: dict, context) -> dict:
     """
     event is a dict which contains the payload
     It is passed as is as the Item, assuming that the invoking entity specified all neccessary fields in the DB

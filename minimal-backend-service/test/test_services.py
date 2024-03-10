@@ -24,31 +24,33 @@ dynamo_table = dynamo_resource.Table(DYNAMO_TABLE_NAME)
 
 
 
-# ###
-# # Test invoking list. list does not need payload
-# response_invoke = lambda_client.invoke(
-#     FunctionName = "list_shopprofiles",
-#     Payload = '{"asdf":"asdf"}'
-# )
-# # Parse the actual payload of the lambda function that was returned
-# response_invoke = json.loads(response_invoke['Payload'].read())
-# pp.pprint(response_invoke['Items'])
-
-
-
-
 ###
-# Test invoking write. Needs an item to put
-# Test with invalid payload -> Returns a parsable error object
-response_invoke_write = lambda_client.invoke(
-    FunctionName = "write_shopprofile",
+# Test invoking list. list does not need payload
+response_invoke = lambda_client.invoke(
+    FunctionName = "list_shopprofiles",
     Payload = '{"asdf":"asdf"}'
 )
 # Parse the actual payload of the lambda function that was returned
-print("-------------")
-pp.pprint(response_invoke_write)
-# response_invoke_write = json.loads(response_invoke_write['Payload'].read())
+pp.pprint(response_invoke)
+print("--------------")
+response_invoke = json.loads(response_invoke['Payload'].read())
+pp.pprint(response_invoke)
+
+
+
+
+# ###
+# # Test invoking write. Needs an item to put
+# # Test with invalid payload -> Returns a parsable error object
+# response_invoke_write = lambda_client.invoke(
+#     FunctionName = "write_shopprofile",
+#     Payload = '{"asdf":"asdf"}'
+# )
+# # Parse the actual payload of the lambda function that was returned
+# print("-------------")
 # pp.pprint(response_invoke_write)
+# # response_invoke_write = json.loads(response_invoke_write['Payload'].read())
+# # pp.pprint(response_invoke_write)
 
 # # Test with valid object
 # response_invoke_write = lambda_client.invoke(
