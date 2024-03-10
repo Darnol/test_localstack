@@ -1,5 +1,5 @@
 # Run with the following line
-# docker compose --project-name test-lambda up -d --build
+# docker compose up -d --build
 
 version: "3.8"
 
@@ -12,7 +12,7 @@ services:
       - "127.0.0.1:4510-4559:4510-4559"  # external services port range
     environment:
       # LocalStack configuration: https://docs.localstack.cloud/references/configuration/
-      - DEBUG=${DEBUG:-1}
+      - DEBUG=${DEBUG:-0}
     volumes:
       - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -20,11 +20,29 @@ services:
       - backend
 
   # COMMENT OUT THE FOLLOWING to start a "simple" localstack container I can test boto3 with
-  sample-app:
-    container_name: "test-lambda"
+  shopprofile:
+    container_name: "shopprofile"
     build:
       context: .
       dockerfile: dockerfile
+      no_cache: true
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack:4566 # host localstack must match the name of the service which runs localstack
+      - AWS_ACCESS_KEY_ID=fakecred # Sometimes boto3 needs credentials
+      - AWS_SECRET_ACCESS_KEY=fakecred
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    depends_on:
+      - localstack
+    networks:
+      - backend
+  
+  shopprofile-debugger:
+    container_name: "shopprofile-debugger"
+    build:
+      context: .
+      dockerfile: dockerfile_debugger
       no_cache: true
     environment:
       - AWS_DEFAULT_REGION=us-east-1

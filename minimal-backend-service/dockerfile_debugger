@@ -1,0 +1,31 @@
+# This dockerfile starts an identical container as shopprofile, but runs indefinitely. Can be used to manually run the test_services.py script
+# This duplication is needed to ensure the boto3 clients can  use the deployed localstack instances
+
+# syntax=docker/dockerfile:1
+FROM python:3.10-alpine
+
+WORKDIR /app
+COPY ./deploy.py /app/
+COPY ./lambdas /app/lambdas/
+COPY ./config /app/config/
+COPY ./test /app/test/
+COPY ./requirements.txt /app/
+
+# Remove all zip files from the lambdas folder
+WORKDIR /app/lambdas
+RUN find . -type f -name "*.zip" -exec rm {} \;
+WORKDIR /app
+
+# # Install packages if needed
+# RUN apk add zip
+# RUN apk add curl
+# RUN apk add jq
+
+# Install python dependencies
+RUN pip install -r requirements.txt
+
+# Make deploy script executable
+RUN chmod +x deploy.py
+
+# Keep running forever
+ENTRYPOINT ["tail", "-f", "/dev/null"]

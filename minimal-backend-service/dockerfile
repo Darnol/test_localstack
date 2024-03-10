@@ -4,6 +4,7 @@ FROM python:3.10-alpine
 WORKDIR /app
 COPY ./deploy.py /app/
 COPY ./lambdas /app/lambdas/
+COPY ./config /app/config/
 COPY ./requirements.txt /app/
 
 # Remove all zip files from the lambdas folder
@@ -22,10 +23,5 @@ RUN pip install -r requirements.txt
 # Make deploy script executable
 RUN chmod +x deploy.py
 
-RUN echo "$PWD"
-
 # This line runs the deploy script upon running the container
-CMD ["deploy.py"]
-
-# alpine only has sh, no bash
-ENTRYPOINT ["python"]
+CMD ["python", "deploy.py"]
