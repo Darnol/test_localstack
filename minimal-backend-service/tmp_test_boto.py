@@ -1,4 +1,5 @@
 import os
+from pyperclip import copy
 
 os.chdir("./minimal-backend-service")
 
@@ -18,27 +19,21 @@ apig_client = boto3.client("apigateway")
 
 APIG_NAME = "apig_test"
 
-# Deploy a lambda function
-LAMBDA_FUNCTION_NAME = "list_shopprofiles"
-LAMBDA_ROLE = "arn:aws:iam::000000000000:role/lambda-role" # given by localstack
-with zipfile.ZipFile(f'lambdas/{LAMBDA_FUNCTION_NAME}/handler.zip', mode='w') as tmp:
-    complete_file_path = f'lambdas/{LAMBDA_FUNCTION_NAME}/handler.py'
-    tmp.write(complete_file_path, arcname=os.path.basename(complete_file_path))
-response_create = lambda_client.create_function(
-    FunctionName = LAMBDA_FUNCTION_NAME,
-    Role = LAMBDA_ROLE,
-    Handler = "handler.handler",
+# Deploy a dummy lambda function
+# zip the lambda handler function file to create a deployment package
+with zipfile.ZipFile(f'dummy_lambda.zip', mode='w') as tmp:
+    tmp.write("dummy_lambda.py")
+lambda_client.create_function(
+    FunctionName = "dummy_lambda",
+    Role = "arn:aws:iam::000000000000:role/lambda-role", # given by localstack
+    Handler = "dummy_lambda.handler",
     Runtime = "python3.10",
-    Code = {'ZipFile': open(f'./lambdas/{LAMBDA_FUNCTION_NAME}/handler.zip', 'rb').read()},
-    # Pass the table name as environment variable
-    Environment={
-        'Variables': {"TableName" : "shopprofiles"}
-    },
-)
+    Code = {'ZipFile': open('dummy_lambda.zip', 'rb').read()}
+    )
 
 # Get the ARN of the desired lambda function to integrate
 pp.pprint(lambda_client.list_functions())
-lambda_arn = [function_def['FunctionArn'] for function_def in lambda_client.list_functions()['Functions'] if function_def['FunctionName']=="list_shopprofiles"][0]
+lambda_arn = [function_def['FunctionArn'] for function_def in lambda_client.list_functions()['Functions'] if function_def['FunctionName']=="dummy_lambda"][0]
 
 # Create the REST API
 apig_rest_api = apig_client.create_rest_api(name = APIG_NAME)
@@ -52,7 +47,7 @@ pp.pprint(apig_resources)
 apig_new_resource = apig_client.create_resource(
     restApiId = apig_id,
     parentId = apig_resources['items'][0]['id'],
-    pathPart = "someresource"
+    pathPart = "testcall"
 )
 
 # Put a HTTP method to a resource
@@ -61,8 +56,7 @@ apig_new_method = apig_client.put_method(
     resourceId = apig_new_resource['id'],
     httpMethod = "GET",
     authorizationType = "NONE",
-    apiKeyRequired = False,
-    operationName = "ListShopprofiles"
+    apiKeyRequired = False
 )
 pp.pprint(apig_new_method)
 
@@ -80,7 +74,7 @@ pp.pprint(apig_new_integration)
 # Deploy the API
 apig_deployment = apig_client.create_deployment(
     restApiId = apig_id,
-    stageName = APIG_NAME + "_deployment"
+    stageName = APIG_NAME
 )
 pp.pprint(apig_deployment)
 
@@ -89,4 +83,4 @@ apig_client.get_deployments(
 )
 
 # Test - Create a url to curl
-print(f"http://localhost.localstack.cloud:4566/restapis/{apig_id}/{APIG_NAME}/_user_request_/someresource")
+copy(f"http://{apig_id}.execute-api.localhost.localstack.cloud:4566/{APIG_NAME}/testcall")

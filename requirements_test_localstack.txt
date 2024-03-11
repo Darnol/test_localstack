@@ -1,3 +1,4 @@
+pyperclip
 boto3
 awscli
 awscli-local
