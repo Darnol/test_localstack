@@ -27,13 +27,14 @@ def deploy_lambda(fct_name: str):
     # zip the lambda handler function file to create a deployment package
     with zipfile.ZipFile(ZIP_NAME, mode='w') as tmp:
         tmp.write("tmp_lambda.py")
-    lambda_client.create_function(
+    response_lambda_create = lambda_client.create_function(
         FunctionName = fct_name,
         Role = "arn:aws:iam::000000000000:role/lambda-role", # given by localstack
         Handler = "tmp_lambda.handler",
         Runtime = "python3.10",
         Code = {'ZipFile': open(ZIP_NAME, 'rb').read()}
         )
+    return response_lambda_create['FunctionArn']
     
 def create_api(api_name: str):
     """
@@ -43,28 +44,43 @@ def create_api(api_name: str):
     apig_rest_api = apig_client.create_rest_api(name = api_name)
     return apig_rest_api
 
-def create_resource(api_name: str, resource_pathPart: str, resource_path: str):
+resource_path = "testcall"
+# resource_path_with_append = "testcall/nestedcall" # das geht nicht!
+resource_path_with_append = "nestedcall" # das geht, muss als parent aber res id mit testcall im pathPart haben
+# resource_path_with_id = "testcall/{id}" # geht nicht
+resource_path_with_id = "{id}"
+
+def create_resource(api_id: str, resource_pathPart: str, resource_path: str):
     "Wrapper for creating a resource"
 
-    # Get API ID
-    try:
-        api_id = [x['id'] for x in apig_client.get_rest_apis()['items'] if x['name'] == api_name][0]
-    except IndexError:
-        raise ValueError(f"api {api_name} not found")
+    # Check API ID
+    if not api_id in [x['id'] for x in apig_client.get_rest_apis()['items']]:
+        raise ValueError(f"api {api_id} not found")
     
-    # Check if a resource with the same path already exists
-    TODO : Do not implement a resource with the exact same path twice!
+    # ?? Check if a resource with the same path already exists
+    # TODO : Do not implement a resource with the exact same path twice!
     
     # Fetch all resources
     apig_resources = apig_client.get_resources(restApiId = api_id)
-    pp.pprint(apig_resources)
+    pp.pprint(apig_resources['items'])
     
     # Add resource
     apig_new_resource = apig_client.create_resource(
         restApiId = api_id,
-        parentId = apig_resources['items'][0]['id'],
-        pathPart = "debugcall"
+        parentId = apig_client.get_resources(restApiId = api_id)['items'][0]['id'], # create on root path
+        # parentId = [res['id'] for res in apig_client.get_resources(restApiId = api_id)['items'] if re.match("testcall", res.get("pathPart",""))][0],
+        pathPart = resource_path_with_id
     )
+    pp.pprint(apig_new_resource)
+    
+    # delete
+    res_to_delete = [res for res in apig_client.get_resources(restApiId = api_id)['items'] if re.match("testcall", res.get('pathPart',''))]
+    for res in res_to_delete:
+        apig_del_resource = apig_client.delete_resource(
+            restApiId = api_id,
+            resourceId = res['id']
+        )
+    
 
     return apig_new_resource
 
@@ -177,13 +193,14 @@ def get_resource_path(api_name: str, resource_path: str) -> str:
 # Deploy
 
 tag_to_use = "1"
-tag_resource_pathPart = "testcall" ; tag_resource_path = "/testcall"
-tag_resource_parametrized_pathPart = "anothertestcall" ; tag_resource_parametrized_path = "/anothertestcall/{test_id}"
+# tag_resource_pathPart = "testcall" ; tag_resource_path = "/testcall"
+# tag_resource_parametrized_pathPart = "anothertestcall" ; tag_resource_parametrized_path = "/anothertestcall/{test_id}"
 
-deploy_lambda(fct_name=f"lambda_test_{tag_to_use}")
+lambda_arn = deploy_lambda(fct_name=f"lambda_test_{tag_to_use}")
 
 response_create_api = create_api(f"api_test_{tag_to_use}")
 pp.pprint(response_create_api)
+api_id = response_create_api['id']
 
 # Create two resources, one normal and one parametrized
 # api_name = f"api_test_{tag_to_use}" ; resource_pathPart = tag_resource_pathPart ; resource_path = tag_resource_path
