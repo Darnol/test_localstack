@@ -8,16 +8,20 @@ def handler(event, context):
 
     print("NOW WE PROCESS event\n")
     body = event['body']
-    query_string_params = event['queryStringParameters']
-
+    path_params = event['pathParameters']
+    
     print("BODY\n")
     pp.pprint(body)
     
-    print("QUERYSTRINGPARAMS\n")
-    pp.pprint(query_string_params)
+    print("PATHPARAMS\n")
+    pp.pprint(path_params)
 
     return({
         "statusCode":200,
         "headers":{},
-        "body":{"processed":"yes processed"}
+        "body":{
+            "did i process?": "yes, I processed",
+            "body of event": body,
+            "path parameter": path_params    
+        }
     })

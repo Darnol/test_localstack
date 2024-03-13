@@ -44,83 +44,71 @@ def create_api(api_name: str):
     apig_rest_api = apig_client.create_rest_api(name = api_name)
     return apig_rest_api
 
-resource_path = "testcall"
-# resource_path_with_append = "testcall/nestedcall" # das geht nicht!
-resource_path_with_append = "nestedcall" # das geht, muss als parent aber res id mit testcall im pathPart haben
-# resource_path_with_id = "testcall/{id}" # geht nicht
-resource_path_with_id = "{id}"
+def create_resource(api_id: str, parent_id: str, resource_path: str) -> str:
+    """
+    Wrapper for creating a resource
 
-def create_resource(api_id: str, resource_pathPart: str, resource_path: str):
-    "Wrapper for creating a resource"
+    Arguments:
+        api_id : ID of the API to create the resource in
+        parent_id : ID of the resource that the resource_path is appended to. If None defaults to root
+        resource_path : The 'unique' part of the path that will be appended to parent_id path
+
+    Return:
+        id of resource created
+    """
 
     # Check API ID
     if not api_id in [x['id'] for x in apig_client.get_rest_apis()['items']]:
         raise ValueError(f"api {api_id} not found")
     
-    # ?? Check if a resource with the same path already exists
-    # TODO : Do not implement a resource with the exact same path twice!
-    
-    # Fetch all resources
-    apig_resources = apig_client.get_resources(restApiId = api_id)
-    pp.pprint(apig_resources['items'])
+    # Check parent_id
+    if not parent_id:
+        # Use root if nothing is specified
+        parent_id = [res['id'] for res in apig_client.get_resources(restApiId = api_id)['items']][0]
+    elif not parent_id in [res['id'] for res in apig_client.get_resources(restApiId = api_id)['items']]:
+        raise ValueError(f"parent resource id {parent_id} not found")
     
     # Add resource
     apig_new_resource = apig_client.create_resource(
         restApiId = api_id,
-        parentId = apig_client.get_resources(restApiId = api_id)['items'][0]['id'], # create on root path
-        # parentId = [res['id'] for res in apig_client.get_resources(restApiId = api_id)['items'] if re.match("testcall", res.get("pathPart",""))][0],
-        pathPart = resource_path_with_id
+        parentId = parent_id,
+        pathPart = resource_path
     )
-    pp.pprint(apig_new_resource)
     
-    # delete
-    res_to_delete = [res for res in apig_client.get_resources(restApiId = api_id)['items'] if re.match("testcall", res.get('pathPart',''))]
-    for res in res_to_delete:
-        apig_del_resource = apig_client.delete_resource(
-            restApiId = api_id,
-            resourceId = res['id']
-        )
-    
+    return apig_new_resource['id']
 
-    return apig_new_resource
-
-def add_lambda_method_and_integration_to_resource(api_name: str, resource_path: str, lambda_name: str, method: str):
+def add_lambda_method_and_integration_to_resource(api_id: str, resource_id: str, lambda_arn: str, method: str):
     """
     Wrapper to add a method to an existing resource
     """
 
-    # Get API ID
-    try:
-        api_id = [x['id'] for x in apig_client.get_rest_apis()['items'] if x['name'] == api_name][0]
-    except IndexError:
-        raise ValueError(f"api {api_name} not found")
+    # Check API ID
+    if not api_id in [x['id'] for x in apig_client.get_rest_apis()['items']]:
+        raise ValueError(f"api {api_id} not found")
     
-    # Get Resource ID, error if not found
-    res_found = False
-    for res in [x for x in apig_client.get_resources(restApiId = api_id)['items']]:
-        if res.get("pathPart","") == resource_path:
-            res_found = True
-            res_id = res['id']
-            break
-    if not res_found:
-        raise ValueError(f"Did not find resource with path {resource_path}")
+    # Check resource_id
+    if not resource_id in [res['id'] for res in apig_client.get_resources(restApiId = api_id)['items']]:
+        raise ValueError(f"resource id {resource_id} not found")
 
     # Get the ARN of the desired lambda function to integrate
-    lambda_arn = [function_def['FunctionArn'] for function_def in lambda_client.list_functions()['Functions'] if function_def['FunctionName']==lambda_name][0]
+    if not lambda_arn in [function_def['FunctionArn'] for function_def in lambda_client.list_functions()['Functions']]:
+        raise ValueError(f"lambda arn {lambda_arn} not found")
 
     # Put a HTTP method to a resource
     apig_new_method = apig_client.put_method(
         restApiId = api_id,
-        resourceId = res_id,
+        resourceId = resource_id,
         httpMethod = method,
         authorizationType = "NONE",
         apiKeyRequired = False
     )
 
+    # NOTE: query string parameters ( a la /getsomething?param=1) is NOT SUPPORTED by boto3
+
     # Put an integration
     apig_new_integration = apig_client.put_integration(
         restApiId = api_id,
-        resourceId = res_id,
+        resourceId = resource_id,
         httpMethod = method,
         type = "AWS_PROXY", # I think thats given if we use lambda
         integrationHttpMethod = "POST", # I think this is always POST, we forward the request to the lambda function
@@ -129,53 +117,40 @@ def add_lambda_method_and_integration_to_resource(api_name: str, resource_path: 
 
     return apig_new_method, apig_new_integration
 
-def deploy_api(api_name: str):
+def deploy_api(api_id: str):
     """
     Deploy an api
-    NOTE: stage_name is always equal to api_name
+    NOTE: stage_name is always equal to "PROD"
     """
     
-    # Get API ID
-    try:
-        api_id = [x['id'] for x in apig_client.get_rest_apis()['items'] if x['name'] == api_name][0]
-    except IndexError:
-        raise ValueError(f"api {api_name} not found")
+    # Check API ID
+    if not api_id in [x['id'] for x in apig_client.get_rest_apis()['items']]:
+        raise ValueError(f"api {api_id} not found")
     
     # Deploy the API
     apig_deployment = apig_client.create_deployment(
         restApiId = api_id,
-        stageName = api_name
+        stageName = "PROD"
     )
 
     return apig_deployment
 
-def get_resource_path(api_name: str, resource_path: str) -> str:
+def get_resource_path(api_id: str, resource_path: str) -> str:
     """
     According to localstack documentation build the url
     """ 
-    url_base = "http://{api_id}.execute-api.{endpoint}/{stage_name}/{resource_path}"
+    url_base = "http://{api_id}.execute-api.{endpoint}/{stage_name}{resource_path}"
 
     endpoint = os.environ['AWS_ENDPOINT_URL']
     # Strip protocol
     endpoint = re.sub(r"^.*\/\/","",endpoint)
     
-    # Get API ID
-    try:
-        api_id = [x['id'] for x in apig_client.get_rest_apis()['items'] if x['name'] == api_name][0]
-    except IndexError:
-        raise ValueError(f"api {api_name} not found")
+    # Check API ID
+    if not api_id in [x['id'] for x in apig_client.get_rest_apis()['items']]:
+        raise ValueError(f"api {api_id} not found")
     
-    # Get stage_name, which is ALWAYS equal to api_name
-    stage_name = api_name
-
-    # Check if resource_path exists
-    res_found = False
-    for res in [x for x in apig_client.get_resources(restApiId = api_id)['items']]:
-        if res.get("pathPart","") == resource_path:
-            res_found = True
-            break
-    if not res_found:
-        raise ValueError(f"Did not find resource with path {resource_path}")
+    # Get stage_name, which is ALWAYS equal to PROD
+    stage_name = "PROD"
 
     url = url_base.format(
         api_id = api_id,
@@ -191,35 +166,40 @@ def get_resource_path(api_name: str, resource_path: str) -> str:
 
 ###
 # Deploy
-
-tag_to_use = "1"
-# tag_resource_pathPart = "testcall" ; tag_resource_path = "/testcall"
-# tag_resource_parametrized_pathPart = "anothertestcall" ; tag_resource_parametrized_path = "/anothertestcall/{test_id}"
-
+tag_to_use = "4"
 lambda_arn = deploy_lambda(fct_name=f"lambda_test_{tag_to_use}")
+
+paths_and_methods_to_create = {
+    'getSomething' : [
+        {"path":"getSomething", "method":"GET", "lambda_arn":lambda_arn},
+        {"path":"{getSomething_id}", "method":"GET", "lambda_arn":lambda_arn},
+    ],
+    'postSomething' : [
+        {"path":"postSomething", "method":"POST", "lambda_arn":lambda_arn},
+    ]
+}
 
 response_create_api = create_api(f"api_test_{tag_to_use}")
 pp.pprint(response_create_api)
 api_id = response_create_api['id']
 
-# Create two resources, one normal and one parametrized
-# api_name = f"api_test_{tag_to_use}" ; resource_pathPart = tag_resource_pathPart ; resource_path = tag_resource_path
-response_create_resrouce = create_resource(f"api_test_{tag_to_use}", tag_resource_pathPart, tag_resource_path)
-pp.pprint(response_create_resrouce)
+# Create resources, for each elemetn in paths_and_methods_to_create
+# Each element contains a tuple with PATH,METHOD,LAMBDA_ARN
+# Each subsequent tuple uses the newly created resource of the previous as parent resource
 
-# response_create_resrouce_parametrized = create_resource(f"api_test_{tag_to_use}", tag_resource_parametrized)
-# pp.pprint(response_create_resrouce_parametrized)
+for resource_type, resource_list in paths_and_methods_to_create.items():
+    print(f"create {resource_type} ... ")
+    for i,resource_tuple in enumerate(resource_list):
+        if i == 0:
+            tmp_parent_res_id = None
+        tmp_parent_res_id = create_resource(api_id = api_id, parent_id = tmp_parent_res_id, resource_path=resource_tuple['path'])
+        resource_tuple['resource_id'] = tmp_parent_res_id
+        _,_ = add_lambda_method_and_integration_to_resource(api_id = api_id, resource_id=tmp_parent_res_id, lambda_arn = resource_tuple['lambda_arn'], method = resource_tuple['method'])
 
-# lambda_name = f"lambda_test_{tag_to_use}"
-response_create_method, response_create_integration = add_lambda_method_and_integration_to_resource(
-    api_name = f"api_test_{tag_to_use}",
-    lambda_name=f"lambda_test_{tag_to_use}",
-    resource_path=tag_resource,
-    method="GET"
-    )
-pp.pprint(response_create_method)
-pp.pprint(response_create_integration)
+response_deploy_api = deploy_api(api_id = api_id)
 
-response_deploy_api = deploy_api(api_name = f"api_test_{tag_to_use}")
-get_resource_path(api_name = f"api_test_{tag_to_use}", resource_path=tag_resource)
-copy(get_resource_path(api_name = f"api_test_{tag_to_use}", resource_path=tag_resource))
+# Now generate URLs
+copy(get_resource_path(api_id = api_id , resource_path="/getSomething/1"))
+
+
+
